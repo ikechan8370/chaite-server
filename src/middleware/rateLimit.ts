@@ -3,7 +3,6 @@ import { HTTPException } from "hono/http-exception";
 import { db } from "../auth";
 import { rateLimit, user } from "../db/schema";
 import { and, eq, gt } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import type { User, Session } from "../db/schema";
 
 export interface RateLimitConfig {
@@ -77,7 +76,7 @@ export const createRateLimiter = <T extends { id: string }>(
       await db(c.env)
         .insert(rateLimit)
         .values({
-          id: nanoid(),
+          id: crypto.randomUUID(),
           userId: user.id,
           endpoint,
           count: 1,
