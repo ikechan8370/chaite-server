@@ -40,8 +40,11 @@ The setup script will:
 - Optionally deploy the worker
 
 [See guide for setting up lemonsqueezy](docs/lemonsqueezy.md)
+
 [How to make changes to database schema](docs/drizzle.md)
+
 [Writing and running tests](docs/tests.md)
+
 [Changing ratelimits](docs/ratelimits.md)
 
 If the quick setup script fails, you can [manually set up](#manual-setup) the database and environment variables.
