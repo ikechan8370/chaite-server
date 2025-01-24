@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "backend-api-kit",
+  "main": "src/index.tsx",
+  "compatibility_date": "2025-01-21",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "placement": {
+    "mode": "smart"
+  },
+  "d1_databases": [
+    {
+      "binding": "DATABASE",
+      "database_name": "backend-api-kit-db",
+      "database_id": "22b96dc6-c202-485c-9866-ffd46ac34be8",
+      "migrations_dir": "./drizzle"
+    }
+  ]
+}

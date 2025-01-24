@@ -1,5 +1,6 @@
 # prod
 dist/
+bun.lock
 
 # dev
 .yarn/
