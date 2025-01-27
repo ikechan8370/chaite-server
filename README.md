@@ -8,7 +8,7 @@ While buildling [supermemory](https://api.supermemory.ai), [markdowner](https://
 ## Features
 - API Key provisioning
 - Rate Limiting
-- Authentication with [better-auth](https://github.com/dhravya/better-auth) (both session based and Bearer token based)
+- Authentication with [better-auth](https://better-auth.com) (both session based and Bearer token based)
 - Database with [Drizzle](https://orm.drizzle.team) + [Cloudflare D1](https://developers.cloudflare.com/d1)
 - Subscriptions with [Lemonsqueezy](https://www.lemonsqueezy.com)
 - Landing page for API
