@@ -194,7 +194,7 @@ async function createDatabaseAndConfigure() {
     // Update wrangler.jsonc with database configuration
     wranglerConfig.d1_databases = [
         {
-            binding: "DATABASE",
+            binding: "USERS_DATABASE",
             database_name: dbName,
             database_id: databaseID,
             migrations_dir: "./drizzle",
