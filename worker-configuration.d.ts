@@ -4,5 +4,7 @@ interface Env {
 	SECRET: string;
 	AUTH_GITHUB_ID: string;
 	AUTH_GITHUB_SECRET: string;
+	AUTH_LINUXDO_ID: string;
+	AUTH_LINUXDO_SECRET: string;
 	LEMONSQUEEZY_CHECKOUT_LINK: string
 }

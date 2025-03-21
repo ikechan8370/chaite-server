@@ -100,7 +100,7 @@ export const Landing: FC<{
           </ul>
         </div>
         <div style={{ display: "flex", gap: "12px" }}>
-          <a href="/signin" style={styles.button}>(demo) Sign in</a>
+          <a href="/signin/linuxdo" style={styles.button}>(demo) Sign in</a>
           <a href="https://github.com/dhravya/backend-api-kit" style={{
             ...styles.button,
             display: "flex",

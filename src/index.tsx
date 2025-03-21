@@ -5,6 +5,7 @@ import { paymentRouter } from "./payment/lemonsqueezy";
 import { apiRouter } from "./api";
 import { generateKey } from "./utils/key";
 import { Landing } from "./ui/landing";
+import {toolRoute, toolsRouter} from "./controllers/tool";
 
 const app = new Hono<{
 	Bindings: Env;
@@ -20,6 +21,8 @@ const app = new Hono<{
 	.route("/", paymentRouter)
 	// api routes
 	.route("/api", apiRouter)
+	.route("/api/v1/tools", toolsRouter)
+	.route("/api/v1/tool", toolRoute)
 	.get("/", async (c) => {
 		const user = c.get("user");
 

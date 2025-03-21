@@ -19,11 +19,11 @@
     "@cloudflare/workers-types": "^4.20250121.0",
     "@types/bun": "^1.2.0",
     "better-sqlite3": "^11.8.1",
+    "bun": "^1.2.0",
     "child_process": "^1.0.2",
+    "dotenv": "^16.4.7",
     "drizzle-kit": "^0.30.2",
     "vitest": "2.1.8",
-    "wrangler": "^3.105.0",
-    "bun": "^1.2.0",
-    "dotenv": "^16.4.7"
+    "wrangler": "^4.3.0"
   }
 }
