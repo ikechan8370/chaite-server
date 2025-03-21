@@ -1,14 +1,14 @@
 import { betterAuth } from "better-auth";
-import { genericOAuth } from "better-auth/plugins"
-import {User, Session, account} from "./db/schema";
+import { genericOAuth } from "better-auth/plugins";
+import { User, Session, account } from "./db/schema";
 import { drizzle } from "drizzle-orm/d1";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import * as schema from "./db/schema";
 import { createMiddleware } from "hono/factory";
 import { Hono } from "hono";
 import { generateKey, decryptKey } from "./utils/key";
-import {and, eq, or} from "drizzle-orm";
-import {generateSalt, hashPassword, verifyPassword} from "./utils/crypto";
+import { and, eq, or } from "drizzle-orm";
+import { generateSalt, hashPassword, verifyPassword } from "./utils/crypto";
 
 const app = new Hono<{
 	Bindings: Env;
@@ -22,6 +22,9 @@ export const db = (env: Env) => drizzle(env.USERS_DATABASE);
 
 export const auth = (env: Env) =>
 	betterAuth({
+		emailAndPassword: {
+			enabled: true,
+		},
 		database: drizzleAdapter(drizzle(env.USERS_DATABASE), {
 			provider: "sqlite",
 			schema: {
@@ -49,22 +52,18 @@ export const auth = (env: Env) =>
 						authorizationUrl: "https://connect.linux.do/oauth2/authorize",
 						tokenUrl: "https://connect.linux.do/oauth2/token",
 						userInfoUrl: "https://connect.linux.do/api/user",
-						// ... other config options
 					},
-					// Add more providers as needed
 				]
 			})
 		]
 	});
 
 export const authMiddleware = createMiddleware(async (c, next) => {
-	// Check for bearer token
 	const authHeader = c.req.header("Authorization");
 	if (authHeader?.startsWith("Bearer ")) {
 		const token = authHeader.substring(7);
 		try {
 			const [userId, lastKeyGeneratedAtTimestamp] = await decryptKey(token, c.env.SECRET);
-			console.log(userId)
 			const user = await db(c.env)
 				.select()
 				.from(schema.user)
@@ -72,9 +71,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
 				.get();
 
 			if (user) {
-				console.log(user)
-				if (!user.lastKeyGeneratedAt || user.lastKeyGeneratedAt === null) {
-					// Update user with current timestamp if no lastKeyGeneratedAt
+				if (!user.lastKeyGeneratedAt) {
 					const now = new Date();
 					await db(c.env)
 						.update(schema.user)
@@ -84,10 +81,8 @@ export const authMiddleware = createMiddleware(async (c, next) => {
 					user.lastKeyGeneratedAt = now;
 				}
 
-				// Convert both timestamps to numbers for comparison
 				const storedTimestamp = user.lastKeyGeneratedAt.getTime();
 				const providedTimestamp = Number(lastKeyGeneratedAtTimestamp);
-				console.log({storedTimestamp, providedTimestamp})
 				if (storedTimestamp === providedTimestamp) {
 					c.set("user", user);
 					c.set("session", null);
@@ -100,11 +95,9 @@ export const authMiddleware = createMiddleware(async (c, next) => {
 			return c.json({ error: "Invalid API key" }, 401);
 		}
 
-		// If we reach here, the API key was invalid
 		return c.json({ error: "Invalid API key" }, 401);
 	}
 
-	// Fall back to session-based auth
 	const session = await auth(c.env).api.getSession({
 		headers: c.req.raw.headers,
 	});
@@ -116,8 +109,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
 			.where(eq(schema.user.id, session.user.id))
 			.get();
 
-		if (user && (!user.lastKeyGeneratedAt || user.lastKeyGeneratedAt === null)) {
-			// Update user with current timestamp if no lastKeyGeneratedAt
+		if (user && !user.lastKeyGeneratedAt) {
 			const now = new Date();
 			await db(c.env)
 				.update(schema.user)
@@ -146,88 +138,50 @@ export const authRouter = app
 	})
 	.post("/register", async (c) => {
 		const { username, email, password } = await c.req.parseBody();
-		// check if it has registered
-		const existingUser = await db(c.env)
-			.select()
-			.from(schema.user)
-			.where(
-				or(
-					eq(schema.user.email, email as string),
-					eq(schema.user.name, username as string)
-				)
-			)
-			.get();
-		if (existingUser) {
-			return c.json({ error: "Username or email already exists" }, 400);
-		}
-		const result = await db(c.env)
-			.insert(schema.user)
-			// @ts-ignore
-			.values({
+		const signUpRes = await auth(c.env).api.signUpEmail({
+			body: {
 				email: email as string,
-				name: email as string,
-				username: username as string,
-				subscriptionId: null,
-				emailVerified: false,
-			})
-			.returning();
-		if (!result) {
-			return c.json({ error: "Failed to create user" }, 500);
-		}
-		const salt = generateSalt()
-		const accountResult = await db(c.env)
-			.insert(schema.account)
-			// @ts-ignore
-			.values({
-				userId: result[0].id,
-				password: hashPassword(password as string, salt),
-				salt,
-			})
-			.returning();
-		if (!accountResult) {
-			return c.json({ error: "Failed to create account" }, 500);
-		}
+				password: password as string,
+				name: username as string,
+				image: "https://pic.ikechan8370.com/images/2022/06/19/1_W35QUSvGpcLuxPo3SRTH4w.png"
+			}
+		})
 
 		const lastKeyGeneratedAt = new Date().getTime();
-		const token = await generateKey(result[0].id, String(lastKeyGeneratedAt), c.env.SECRET);
+		const token = await generateKey(signUpRes.user.id, String(lastKeyGeneratedAt), c.env.SECRET);
 		return c.json({
 			code: 0,
 			data: { token },
 			msg: 'success'
 		});
-})
+	})
 	.post('/signin', async (c) => {
 		const { email, password } = await c.req.parseBody();
-		const result = await db(c.env)
-			.select({
-				user_id: schema.user.id,
-				user_email: schema.user.email,
-				account_salt: schema.account.salt,
-				account_passwordHash: schema.account.password,
-			})
-			.from(schema.account)
-			.leftJoin(schema.user, eq(schema.account.userId, schema.user.id))
-			.where(eq(schema.user.email, email as string))
-			.get();
-		if (!result) return c.json({ error: "用户不存在或用户名密码错误" }, 401);
-		const isValid = verifyPassword(
-			password as string,
-			result.account_passwordHash!,
-			result.account_salt!
-		);
+		const signInRes = await auth(c.env).api.signInEmail({
+			body: {
+				email: email as string,
+				password: password as string
+			}
+		})
+		if (signInRes.user) {
+			const lastKeyGeneratedAt = new Date().getTime();
+			const token = await generateKey(signInRes.user.id, String(lastKeyGeneratedAt), c.env.SECRET);
 
-		if (!isValid) return c.json({ error: "用户不存在或用户名密码错误" }, 401);
+			return c.json({
+				code: 0,
+				data: { token },
+				msg: 'success'
+			});
+		} else {
+			return c.json({
+				code: 1,
+				data: null,
+				msg: 'failed'
+			}, 401);
+		}
 
-		const lastKeyGeneratedAt = new Date().getTime();
-		const token = await generateKey(result.user_id!, String(lastKeyGeneratedAt), c.env.SECRET);
 
-		return c.json({
-			code: 0,
-			data: { token },
-			msg: 'success'
-		});
-
-})
+	})
 	.get("/signin/:provider", async (c) => {
 		const provider = c.req.param("provider");
 		const signinUrl = await auth(c.env).api.signInWithOAuth2({
@@ -254,4 +208,3 @@ export const authRouter = app
 
 		return c.json({ token });
 	});
-
