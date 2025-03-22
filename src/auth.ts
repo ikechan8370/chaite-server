@@ -1,4 +1,4 @@
-import { betterAuth } from "better-auth";
+import {betterAuth, logger} from "better-auth";
 import { genericOAuth } from "better-auth/plugins";
 import { User, Session, account } from "./db/schema";
 import { drizzle } from "drizzle-orm/d1";
@@ -8,7 +8,6 @@ import { createMiddleware } from "hono/factory";
 import { Hono } from "hono";
 import { generateKey, decryptKey } from "./utils/key";
 import { and, eq, or } from "drizzle-orm";
-import { generateSalt, hashPassword, verifyPassword } from "./utils/crypto";
 
 const app = new Hono<{
 	Bindings: Env;
@@ -59,6 +58,13 @@ export const auth = (env: Env) =>
 	});
 
 export const authMiddleware = createMiddleware(async (c, next) => {
+	const skipAuthPaths = ["/register"];
+	const requestPath = c.req.path;
+
+	if (skipAuthPaths.includes(requestPath)) {
+		await next();
+		return;
+	}
 	const authHeader = c.req.header("Authorization");
 	if (authHeader?.startsWith("Bearer ")) {
 		const token = authHeader.substring(7);
@@ -69,7 +75,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
 				.from(schema.user)
 				.where(eq(schema.user.id, userId))
 				.get();
-
+			logger.info(JSON.stringify(user))
 			if (user) {
 				if (!user.lastKeyGeneratedAt) {
 					const now = new Date();
@@ -81,13 +87,15 @@ export const authMiddleware = createMiddleware(async (c, next) => {
 					user.lastKeyGeneratedAt = now;
 				}
 
-				const storedTimestamp = user.lastKeyGeneratedAt.getTime();
-				const providedTimestamp = Number(lastKeyGeneratedAtTimestamp);
-				if (storedTimestamp === providedTimestamp) {
+				const storedTimestamp = user.lastKeyGeneratedAt.getTime() / 1000;
+				const providedTimestamp = Number(lastKeyGeneratedAtTimestamp) / 1000;
+				if (Math.floor(storedTimestamp) === Math.floor(providedTimestamp)) {
 					c.set("user", user);
 					c.set("session", null);
 					await next();
 					return;
+				} else {
+					logger.error(`API Key validation failed: ${userId}, storedTimestamp: ${storedTimestamp}, providedTimestamp: ${providedTimestamp}`)
 				}
 			}
 		} catch (e) {
@@ -137,48 +145,112 @@ export const authRouter = app
 		return c.redirect("/");
 	})
 	.post("/register", async (c) => {
-		const { username, email, password } = await c.req.parseBody();
-		const signUpRes = await auth(c.env).api.signUpEmail({
-			body: {
-				email: email as string,
-				password: password as string,
-				name: username as string,
-				image: "https://pic.ikechan8370.com/images/2022/06/19/1_W35QUSvGpcLuxPo3SRTH4w.png"
-			}
-		})
-
-		const lastKeyGeneratedAt = new Date().getTime();
-		const token = await generateKey(signUpRes.user.id, String(lastKeyGeneratedAt), c.env.SECRET);
-		return c.json({
-			code: 0,
-			data: { token },
-			msg: 'success'
-		});
-	})
-	.post('/signin', async (c) => {
-		const { email, password } = await c.req.parseBody();
-		const signInRes = await auth(c.env).api.signInEmail({
-			body: {
-				email: email as string,
-				password: password as string
-			}
-		})
-		if (signInRes.user) {
-			const lastKeyGeneratedAt = new Date().getTime();
-			const token = await generateKey(signInRes.user.id, String(lastKeyGeneratedAt), c.env.SECRET);
-
+		const body = await c.req.json();
+		console.log(body)
+		const { username, email, password } = body;
+		console.log({ username, email, password })
+		if (!email || !password || !username) {
+			return c.json({
+				code: 1,
+				data: null,
+				msg: 'email, password or username cannot be empty'
+			}, 400);
+		}
+		try {
+			const signUpRes = await auth(c.env).api.signUpEmail({
+				body: {
+					email: email as string,
+					password: password as string,
+					name: username as string,
+					image: "https://pic.ikechan8370.com/images/2022/06/19/1_W35QUSvGpcLuxPo3SRTH4w.png"
+				}
+			})
+			const lastKeyGeneratedAt = new Date();
+			const token = await generateKey(signUpRes.user.id, String(lastKeyGeneratedAt.getTime()), c.env.SECRET);
+			await db(c.env)
+				.update(schema.user)
+				.set({ lastKeyGeneratedAt })
+				.where(eq(schema.user.id, signUpRes.user.id))
+				.run();
 			return c.json({
 				code: 0,
 				data: { token },
 				msg: 'success'
 			});
-		} else {
+		} catch (err) {
+			if (err instanceof Error) {
+				return c.json({
+					code: 1,
+					data: null,
+					// @ts-ignore
+					msg: err.body?.message || err.message
+				}, 400);
+			} else {
+				return c.json({
+					code: 1,
+					data: null,
+					msg: 'failed'
+				}, 400);
+			}
+		}
+
+
+
+	})
+	.post('/signin', async (c) => {
+		const { email, password } = await c.req.json();
+		if (!email || !password) {
 			return c.json({
 				code: 1,
 				data: null,
-				msg: 'failed'
-			}, 401);
+				msg: 'email or password is empty'
+			}, 400);
 		}
+		try {
+			const signInRes = await auth(c.env).api.signInEmail({
+				body: {
+					email: email as string,
+					password: password as string
+				}
+			})
+			if (signInRes.user) {
+				const lastKeyGeneratedAt = new Date();
+				const token = await generateKey(signInRes.user.id, String(lastKeyGeneratedAt.getTime()), c.env.SECRET);
+				await db(c.env)
+					.update(schema.user)
+					.set({ lastKeyGeneratedAt })
+					.where(eq(schema.user.id, signInRes.user.id))
+					.run();
+
+				return c.json({
+					code: 0,
+					data: { token },
+					msg: 'success'
+				});
+			} else {
+				return c.json({
+					code: 1,
+					data: null,
+					msg: 'failed'
+				}, 401);
+			}
+		} catch (err) {
+			if (err instanceof Error) {
+				return c.json({
+					code: 1,
+					data: null,
+					// @ts-ignore
+					msg: err.body?.message || err.message
+				}, 401);
+			} else {
+				return c.json({
+					code: 1,
+					data: null,
+					msg: 'failed'
+				}, 401);
+			}
+		}
+
 
 
 	})

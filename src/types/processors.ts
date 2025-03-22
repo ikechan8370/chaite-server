@@ -2,7 +2,7 @@
 
 import { AbstractShareable } from './cloud'
 import { AssistantMessage, UserMessage } from './models'
-import { PROCESSOR_TYPE_MAP } from '../const/index'
+import { PROCESSOR_TYPE_MAP } from '../const'
 
 export class ProcessorDTO extends AbstractShareable<ProcessorDTO> {
   constructor(params: Partial<ProcessorDTO>) {

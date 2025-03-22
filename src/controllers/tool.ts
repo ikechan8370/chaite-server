@@ -1,5 +1,5 @@
-import { Hono } from "hono";
-import { ratelimiter } from "../middleware/rateLimit";
+import {Hono} from "hono";
+import {ratelimiter} from "../middleware/rateLimit";
 import {User, Session, account, ToolTable} from "../db/schema";
 import {db} from "../auth";
 import * as schema from "../db/schema";
@@ -17,11 +17,13 @@ export const toolsRouter = new Hono<{
   .use(ratelimiter)
   .get("/", async (c) => {
     const database = db(c.env)
-    const users = await database.select()
+    const tools = await database.select()
       .from(schema.tool)
       .all()
+
+    const user = c.get("user");
     return c.json({
-      data: users,
+      data: tools.map(t => fromToolTable(t, user)),
       code: 0,
       msg: 'success'
     })
@@ -42,8 +44,18 @@ export const toolRoute = new Hono<{
       .from(schema.tool)
       .where(eq(schema.tool.id, parseInt(id)))
       .get()
+
+    if (!tool) {
+      return c.json({
+        data: null,
+        code: 404,
+        msg: 'Tool not found'
+      }, 404);
+    }
+
+    const user = c.get("user");
     return c.json({
-      data: tool,
+      data: fromToolTable(tool, user),
       code: 0,
       msg: 'success'
     })
@@ -60,9 +72,66 @@ export const toolRoute = new Hono<{
       msg: 'success'
     })
   })
+  .patch("/:id", async (c) => {
+    const database = db(c.env)
+    const id = c.req.param("id")
+    const body = (await c.req.json()) as Partial<ToolDTO>
+    const user = c.get("user")
+
+    const existingTool = await database.select()
+      .from(schema.tool)
+      .where(eq(schema.tool.id, parseInt(id)))
+      .get()
+
+    if (!existingTool) {
+      return c.json({
+        data: null,
+        code: 404,
+        msg: 'Tool not found'
+      }, 404);
+    }
+
+    // Only allow updating specific fields
+    const updateData: any = {
+      updatedAt: new Date()
+    };
+
+    if (body.name !== undefined) updateData.name = body.name;
+    if (body.description !== undefined) updateData.description = body.description;
+    if (body.code !== undefined) updateData.code = body.code;
+    if (body.status !== undefined) updateData.status = body.status;
+    if (body.permission !== undefined) updateData.permission = body.permission;
+    if (body.embedded !== undefined) updateData.embedded = body.embedded ? 1 : 0;
+
+    const result = await database.update(schema.tool)
+      .set(updateData)
+      .where(eq(schema.tool.id, parseInt(id)))
+      .returning()
+      .all();
+
+    return c.json({
+      data: fromToolTable(result[0], user),
+      code: 0,
+      msg: 'success'
+    });
+  })
+  .delete("/:id", async (c) => {
+    const database = db(c.env)
+    const id = c.req.param("id")
+
+    await database.delete(schema.tool)
+      .where(eq(schema.tool.id, parseInt(id)))
+      .run();
+
+    return c.json({
+      data: null,
+      code: 0,
+      msg: 'Tool deleted successfully'
+    });
+  });
 
 
-function intoToolTable (tool: ToolDTO, uploader: User): ToolTable {
+function intoToolTable(tool: ToolDTO, uploader: User): ToolTable {
   // @ts-ignore
   return {
     // id: 0,
@@ -79,7 +148,7 @@ function intoToolTable (tool: ToolDTO, uploader: User): ToolTable {
   }
 }
 
-function fromToolTable (tool: ToolTable, user: User): ToolDTO {
+function fromToolTable(tool: ToolTable, user: User): ToolDTO {
   return new ToolDTO({
     id: tool.id + '',
     name: tool.name,

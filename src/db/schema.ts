@@ -35,7 +35,6 @@ export const account = sqliteTable("account", {
   refreshTokenExpiresAt: integer("refreshTokenExpiresAt", { mode: "timestamp" }),
   scope: text("scope"),
   idToken: text("idToken"),
-  salt: text("salt").notNull(),
   password: text("password"),
   createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull()
@@ -138,6 +137,65 @@ export const toolGroupId = sqliteTable("toolGroupId", {
   toolId: integer("toolId").notNull().references(() => tool.id),
 })
 
+export const role = sqliteTable("role", {
+  id: integer("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+});
+
+export const permission = sqliteTable("permission", {
+  id: integer("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  resource: text("resource").notNull(),
+  action: text("action").notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+});
+
+export const rolePermission = sqliteTable("rolePermission", {
+  id: integer("id").primaryKey(),
+  roleId: integer("roleId").notNull().references(() => role.id),
+  permissionId: integer("permissionId").notNull().references(() => permission.id),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+});
+
+export const userRole = sqliteTable("userRole", {
+  id: integer("id").primaryKey(),
+  userId: text("userId").notNull().references(() => user.id),
+  roleId: integer("roleId").notNull().references(() => role.id),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+});
+
+export const menuItem = sqliteTable("menuItem", {
+  id: integer("id").primaryKey(),
+  name: text("name").notNull(),
+  path: text("path").notNull(),
+  icon: text("icon"),
+  parentId: integer("parentId"),
+  order: integer("order").notNull().default(0),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+});
+
+export const menuPermission = sqliteTable("menuPermission", {
+  id: integer("id").primaryKey(),
+  menuItemId: integer("menuItemId").notNull().references(() => menuItem.id),
+  permissionId: integer("permissionId").notNull().references(() => permission.id),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+});
+
+export type MenuItem = typeof menuItem.$inferSelect;
+export type MenuPermission = typeof menuPermission.$inferSelect;
+export type Role = typeof role.$inferSelect;
+export type Permission = typeof permission.$inferSelect;
+export type RolePermission = typeof rolePermission.$inferSelect;
+export type UserRole = typeof userRole.$inferSelect;
 export type User = typeof user.$inferSelect;
 export type Session = typeof session.$inferSelect;
 export type Account = typeof account.$inferSelect;
